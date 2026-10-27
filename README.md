@@ -15,6 +15,13 @@ reproductions of particular toys.
 
 See [firmware setup, wiring, and commands](firmware/README.md).
 
+**UART is implemented in both firmware variants:** UART0 at **115200 baud, 8N1**,
+with **GP0 = TX** and **GP1 = RX**, using 3.3 V logic and common ground.
+Send newline-terminated commands such as `STATUS`, `CHARACTER COMPANION`, and
+`SAY Hello, my friend!`. USB serial accepts the same commands. UART hardware
+operation has not yet been tested on a physical board; only I2C and SPI command
+transports remain unimplemented.
+
 ## Build and hear the characters
 
 ### Download the audition files
