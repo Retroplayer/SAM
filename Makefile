@@ -5,10 +5,21 @@ REF = .deps/arduino-SAM/src
 CPPFLAGS += -Iinclude -Icompat -I$(REF)
 REFERENCE = $(REF)/sam.c $(REF)/render.c $(REF)/reciter.c $(REF)/sam_debug.c
 
-.PHONY: all reference test sanitize demo clean
+.PHONY: all reference sdk firmware-pwm firmware-i2s firmware-test test sanitize demo clean
 all: build/robot-sam
 reference:
 	sh tools/fetch-reference.sh
+sdk:
+	sh tools/fetch-sdk.sh
+firmware-pwm:
+	cmake -S firmware -B build/pwm -DCMAKE_BUILD_TYPE=Release -DAUDIO_OUTPUT=PWM
+	cmake --build build/pwm -j2
+firmware-i2s:
+	cmake -S firmware -B build/i2s -DCMAKE_BUILD_TYPE=Release -DAUDIO_OUTPUT=I2S
+	cmake --build build/i2s -j2
+firmware-test:
+	python3 tests/test_firmware.py
+	python3 tests/test_firmware_config.py
 build:
 	mkdir -p build
 build/robot.o: src/robot.c include/robot.h | build

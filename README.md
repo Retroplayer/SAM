@@ -5,10 +5,15 @@ character once, then send text. A portable C11 planner expands acronyms and
 numbers, interprets punctuation and emphasis, and supplies character-dependent
 delivery to a SAM reference backend. No network or AI service is used at runtime.
 
-**Current status:** desktop CLI and WAV rendering work. RP2040-Zero is the hardware
-target, but this revision does not yet include flashable firmware, PWM/DMA audio,
-or UART/I2C/SPI drivers. Audio validation is programmatic; presets are initial
-tuning candidates, not verified reproductions of particular toys.
+**Current status:** desktop CLI and WAV rendering work. RP2040-Zero firmware now
+builds with default PWM/DMA audio or selectable PIO/DMA I2S audio, plus UART and
+USB serial commands. Both UF2 variants are available in [downloads](downloads/README.md).
+They are cross-compiled and structurally checked, but have not been tested on a
+physical board. I2C/SPI command transports and embedded character persistence
+are not implemented. Presets are initial tuning candidates, not verified
+reproductions of particular toys.
+
+See [firmware setup, wiring, and commands](firmware/README.md).
 
 ## Build and hear the characters
 
@@ -167,6 +172,7 @@ profile persistence, six distinct audio outputs, PCM content, and WAV structure.
 `make sanitize` runs planner checks under AddressSanitizer and UBSan. It does not
 claim to sanitize the entire third-party engine or validate listening quality.
 
-The next hardware milestone is RP2040-Zero firmware with UART commands, buffered
-PWM audio, explicit stop/status handling, and measured underruns and resource
-use. I2C and SPI should reuse the same command semantics after UART works.
+The hardware milestone now needs a physical RP2040-Zero audition: verify PWM and
+I2S waveforms, STOP behavior, and underrun counts. The firmware uses buffered DMA
+audio, keeps serial commands responsive on core 0, and performs planning and
+synthesis on core 1. I2C and SPI command transports remain future work.
