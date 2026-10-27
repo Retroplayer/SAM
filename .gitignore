@@ -1,0 +1,5 @@
+/build/
+/.deps/
+*.wav
+!/demos/*.wav
+*.uf2
