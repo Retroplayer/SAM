@@ -1,0 +1,11 @@
+# Cylon-inspired audition using only original SAM voice controls.
+# Run from the repository root: build/robot-sam --console < demos/cylon-sam.commands
+# Output: speech-001.wav in the current directory.
+CHARACTER CLASSIC
+SET PITCH 100
+SET SPEED 90
+SET MOUTH 110
+SET THROAT 170
+SET SING 1
+SAY By your command. All systems are operational. You cannot escape. The fleet will be destroyed.
+QUIT
