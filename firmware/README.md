@@ -31,8 +31,8 @@ GPIO numbers below are RP2040 GPIO numbers, not physical header pin numbers.
 | UART RX | GP1 | Host TX to board |
 | PWM audio | GP14 | Output; PWM build only |
 | I2S DIN/data | GP10 | Output to DAC/amplifier DIN |
-| I2S BCLK | GP11 | Output to DAC/amplifier BCLK |
-| I2S LRCLK/WS | GP12 | Output to DAC/amplifier LRC/WS |
+| I2S BCLK | GP9 | Output to DAC/amplifier BCLK |
+| I2S LRCLK/WS | GP8 | Output to DAC/amplifier LRC/WS |
 
 Connect common ground. UART and I2S signals use 3.3 V logic.
 The onboard GP16 RGB LED is not used.
@@ -54,7 +54,7 @@ SAM's 8-bit amplitude character.
 ### I2S
 
 A **MAX98357A I2S amplifier module** is a suitable initial candidate. Connect
-GP10 to DIN, GP11 to BCLK, and GP12 to LRC; power the module according to its
+GP10 to DIN, GP9 to BCLK, and GP8 to LRC; power the module according to its
 specification and connect its speaker outputs as specified by the module.
 
 Output is master-mode Philips I2S, MSB first, **16-bit signed samples in two
@@ -145,12 +145,12 @@ To select I2S and customize pins:
 
 ```sh
 cmake -S firmware -B build/custom-i2s -DCMAKE_BUILD_TYPE=Release \
-  -DAUDIO_OUTPUT=I2S -DROBOT_I2S_DATA_PIN=10 -DROBOT_I2S_CLOCK_PIN=11
+  -DAUDIO_OUTPUT=I2S -DROBOT_I2S_DATA_PIN=10 -DROBOT_I2S_CLOCK_PIN=9
 cmake --build build/custom-i2s -j2
 ```
 
 Other CMake settings: `ROBOT_PWM_PIN`, `ROBOT_UART_TX_PIN`, `ROBOT_UART_RX_PIN`.
-PWM must use an even GPIO (channel A). I2S LRCLK is always BCLK GPIO + 1.
+PWM must use an even GPIO (channel A). I2S LRCLK is always BCLK GPIO - 1.
 Configuration rejects invalid modes, GPIO ranges, overlapping active pins,
 and pins incompatible with UART0. Check the board pinout before assigning
 alternative GPIOs; some RP2040 GPIOs are not exposed or have onboard uses.

@@ -14,6 +14,7 @@ are not implemented. Presets are initial tuning candidates, not verified
 reproductions of particular toys.
 
 See [firmware setup, wiring, and commands](firmware/README.md).
+The current I2S download uses **LRC/WS GP8, BCLK GP9, and DIN GP10**.
 
 **UART is implemented in both firmware variants:** UART0 at **115200 baud, 8N1**,
 with **GP0 = TX** and **GP1 = RX**, using 3.3 V logic and common ground.

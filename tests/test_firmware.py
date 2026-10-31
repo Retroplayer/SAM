@@ -53,7 +53,7 @@ def check_i2s():
         assert side, line
         pins = int(side[1], 2)
         old_clock = clock
-        clock, ws = pins & 1, pins >> 1
+        clock, ws = pins >> 1, pins & 1
         next_pc = (pc + 1) % len(instructions)
         if line.startswith("out pins, 1"):
             data = (word >> (31 - bit % 32)) & 1

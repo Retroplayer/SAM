@@ -108,7 +108,7 @@ int main(void) {
     robot_init(&robot);
     sem_init(&work,0,1);queue_init(&events,sizeof(unsigned),8);
     audio_init();multicore_launch_core1_with_stack(worker,worker_stack,sizeof(worker_stack));
-    reply("READY robot-sam 0.2.0 audio=%s rate=%u",audio_backend(),ROBOT_RATE);
+    reply("READY robot-sam 0.2.1 audio=%s rate=%u",audio_backend(),ROBOT_RATE);
     Line usb={0},serial={0};
     for (;;) {
         unsigned event;

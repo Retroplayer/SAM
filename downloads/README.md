@@ -5,7 +5,11 @@ Download the file for your audio hardware:
 - [PWM UF2 — default](https://github.com/Retroplayer/SAM/raw/refs/heads/main/downloads/robot-sam-PWM.uf2)
 - [I2S UF2 — external DAC/amplifier](https://github.com/Retroplayer/SAM/raw/refs/heads/main/downloads/robot-sam-I2S.uf2)
 
-Both are version 0.2.0 for Waveshare RP2040-Zero, with USB serial and UART0
+I2S wiring: **LRC/WS = GP8, BCLK = GP9, DIN = GP10**.
+Version 0.2.1 changes the I2S clock order and defaults; earlier builds used
+BCLK GP11 and LRC GP12. Use the wiring for the firmware version you flash.
+
+Both are version 0.2.1 for Waveshare RP2040-Zero, with USB serial and UART0
 (115200 baud). Select the output by flashing the corresponding file.
 
 See [wiring, flashing, commands, and build instructions](../firmware/README.md).

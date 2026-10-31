@@ -6,9 +6,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 cases = [
     ("mode", ["-DAUDIO_OUTPUT=DAC"], "AUDIO_OUTPUT must be PWM or I2S"),
     ("pwm-pin", ["-DROBOT_PWM_PIN=15"], "must be even"),
-    ("i2s-overlap", ["-DAUDIO_OUTPUT=I2S", "-DROBOT_I2S_DATA_PIN=12"], "must not overlap"),
+    ("i2s-overlap", ["-DAUDIO_OUTPUT=I2S", "-DROBOT_I2S_DATA_PIN=8"], "must not overlap"),
     ("uart-pin", ["-DROBOT_UART_TX_PIN=2"], "Pins must select UART0"),
-    ("i2s-range", ["-DAUDIO_OUTPUT=I2S", "-DROBOT_I2S_CLOCK_PIN=29"], "at most 28/29"),
+    ("i2s-range", ["-DAUDIO_OUTPUT=I2S", "-DROBOT_I2S_CLOCK_PIN=0"], "BCLK must be at least 1"),
 ]
 for name, options, expected in cases:
     result = subprocess.run([
