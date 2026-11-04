@@ -1,5 +1,7 @@
 # RP2040-Zero development firmware
 
+**[Firmware user manual](../docs/FIRMWARE_MANUAL.md)** — complete setup and command reference.
+
 Download the file for your audio hardware:
 
 - [PWM UF2 — default](https://github.com/Retroplayer/SAM/raw/refs/heads/main/downloads/robot-sam-PWM.uf2)

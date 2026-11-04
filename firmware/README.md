@@ -1,5 +1,8 @@
 # RP2040-Zero firmware
 
+For operating instructions, see the **[complete firmware user manual](../docs/FIRMWARE_MANUAL.md)**.
+This page also contains the build and implementation notes.
+
 Two **build-time** audio choices share the same speech engine and commands:
 
 - **PWM**, the default: hardware PWM on GP14, fed by timer-paced DMA.

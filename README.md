@@ -1,5 +1,8 @@
 # SAM: robot speech for RP2040-Zero
 
+**[Read the complete firmware user manual](docs/FIRMWARE_MANUAL.md)** — wiring,
+flashing, every command and voice setting, pronunciation, phonemes, and troubleshooting.
+
 A first working audition prototype for expressive 1980s robot speech. Select a
 character once, then send text. A portable C11 planner expands acronyms and
 numbers, interprets punctuation and emphasis, and supplies character-dependent
