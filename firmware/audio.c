@@ -1,5 +1,6 @@
 #include "audio.h"
 #include "robot.h"
+#include "robot_pcm.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
 #include "hardware/irq.h"
@@ -24,16 +25,21 @@ static atomic_int scheduled[2];
 static atomic_bool cancelled, producing, played;
 static atomic_uint gaps;
 static atomic_uint outstanding;
+static atomic_uint volume=ROBOT_VOLUME_DEFAULT;
+static atomic_uint clipped_samples;
 /* Producer-only state, used on core 1. */
 static int filling=-1;
 static unsigned filled;
 
 static uint32_t encode(uint8_t sample) {
+    bool clipped;
+    int16_t scaled=robot_pcm16(sample,atomic_load(&volume),&clipped);
+    if (clipped) atomic_fetch_add(&clipped_samples,1);
 #ifdef ROBOT_AUDIO_I2S
-    uint16_t pcm=(uint16_t)(int16_t)(((int)sample-128)*256);
+    uint16_t pcm=(uint16_t)scaled;
     return ((uint32_t)pcm<<16)|pcm;
 #else
-    return sample;
+    return (uint32_t)(((int32_t)scaled+32768)/256);
 #endif
 }
 const char *audio_backend(void) {
@@ -142,6 +148,7 @@ void audio_begin(void) {
     atomic_store(&cancelled,false);
     atomic_store(&played,false);
     atomic_store(&gaps,0);
+    atomic_store(&clipped_samples,0);
     atomic_store(&producing,true);
 }
 bool audio_sample(void *context, uint8_t sample) {
@@ -179,3 +186,9 @@ void audio_finish(void) {
 void audio_request_stop(void) {atomic_store(&cancelled,true);}
 bool audio_stopped(void) {return atomic_load(&cancelled);}
 uint32_t audio_underruns(void) {return atomic_load(&gaps);}
+bool audio_set_volume(unsigned percent) {
+    if (percent>ROBOT_VOLUME_MAX) return false;
+    atomic_store(&volume,percent);return true;
+}
+unsigned audio_volume(void) {return atomic_load(&volume);}
+uint32_t audio_clipped(void) {return atomic_load(&clipped_samples);}

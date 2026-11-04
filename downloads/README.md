@@ -11,7 +11,7 @@ I2S wiring: **LRC/WS = GP8, BCLK = GP9, DIN = GP10**.
 Version 0.2.1 changes the I2S clock order and defaults; earlier builds used
 BCLK GP11 and LRC GP12. Use the wiring for the firmware version you flash.
 
-Both are version 0.2.1 for Waveshare RP2040-Zero, with USB serial and UART0
+Both are version 0.3.0 for Waveshare RP2040-Zero, with USB serial and UART0
 (115200 baud). Select the output by flashing the corresponding file.
 
 See [wiring, flashing, commands, and build instructions](../firmware/README.md).
@@ -23,6 +23,11 @@ passed. **Not yet tested on physical hardware.**
 Built with Pico SDK 2.2.0 (commit
 `a1438dff1d38bd9c65dbd693f0e5db4b9ae91779`) and xPack GCC 14.2.1-1.1.
 Checksums are in [SHA256SUMS](SHA256SUMS).
+
+Version 0.3.0 adds `SET VOLUME 0..400` to both outputs. Default 100 preserves
+the old level; try 150 or 200 for boost. Above 100, peaks may clip; STATUS and
+completion events report a clipping count. Character selection preserves the
+master volume, and reset restores 100. No extra GPIO wiring is needed.
 
 The firmware includes the SAM reference engine described in
 [THIRD_PARTY.md](../THIRD_PARTY.md), which has unresolved licensing.

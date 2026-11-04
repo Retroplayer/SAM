@@ -12,4 +12,7 @@ void audio_finish(void);
 void audio_request_stop(void);
 bool audio_stopped(void);
 uint32_t audio_underruns(void);
+bool audio_set_volume(unsigned percent);
+unsigned audio_volume(void);
+uint32_t audio_clipped(void);
 #endif

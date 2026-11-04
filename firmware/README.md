@@ -72,6 +72,19 @@ Devices requiring MCLK, other slot widths, or I2C configuration need additional
 support. Changing backend currently means flashing the other UF2, not sending
 a runtime command.
 
+## Volume (0.3.0)
+
+Use `SET VOLUME 0..400`: 0 mutes, 100 is the previous firmware's level and boot
+default, 200 doubles amplitude, and 400 is maximum 4× boost. Try 150 or 200
+first. Boost saturates peaks rather than wrapping; STATUS and DONE/STOPPED
+report `clipped`, a generated-sample clipping count reset per request.
+
+Volume is independent of CHARACTER, remains adjustable while speaking, and
+resets on reboot. Already prepared buffers retain their previous level for
+roughly up to 0.1 second. No hardware GAIN connection is required. There is
+still no firmware SD-pin control. The amplifier's 3 W rating is maximum power
+under specified conditions, not guaranteed output for every speaker or supply.
+
 ## Commands
 
 ```text
@@ -93,7 +106,7 @@ normalization. `HELP` lists commands.
 - `ACCEPTED` acknowledges a speech request; worker-side planning can still reject
   its content with `ERR ...`.
 - `STARTED` means synthesis has started, not that sound has already left the DAC.
-- `DONE underruns=N` is emitted after all queued audio blocks have played.
+- `DONE underruns=N clipped=M` is emitted after all queued audio blocks have played.
 - A second speech request while busy gets `ERR busy`; no speech queue is exposed.
 - `STOP` stops further production and drops queued buffers. Already scheduled
   DMA audio can take up to roughly two 256-sample blocks (~23 ms) to finish,

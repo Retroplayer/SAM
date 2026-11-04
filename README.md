@@ -16,6 +16,10 @@ physical board. I2C/SPI command transports and embedded character persistence
 are not implemented. Presets are initial tuning candidates, not verified
 reproductions of particular toys.
 
+**Volume:** firmware 0.3.0 supports `SET VOLUME 0..400` on both outputs.
+100 is the original level; try 200 for boost, 0 for mute. Boost may clip peaks;
+STATUS and completion events report clipping. No amplifier GAIN wiring is needed.
+
 See [firmware setup, wiring, and commands](firmware/README.md).
 The current I2S download uses **LRC/WS GP8, BCLK GP9, and DIN GP10**.
 
@@ -94,7 +98,8 @@ QUIT
 ```
 
 In a later session, use `LOAD_CHARACTER build/my-robot.profile` and continue with
-`SAY`. Files save the full voice and custom pronunciation dictionary. Loading an
+`SAY`. Files save the full voice and custom pronunciation dictionary; master VOLUME
+is an output setting and is not included. Loading an
 invalid file leaves the current character untouched. These are desktop files;
 embedded flash persistence is not implemented yet.
 
@@ -110,6 +115,7 @@ still uses text normalization; it is not a claim of bit-exact original emulation
 
 | Setting | Range | Meaning |
 | --- | --- | --- |
+| `VOLUME` | 0..400 | Master output percent: 0=mute, 100=unity, above 100=boost |
 | `PITCH` | 0..255 | Raw SAM pitch period; lower generally sounds higher |
 | `SPEED` | 0..255 | Raw SAM timing; higher generally sounds slower |
 | `MOUTH`, `THROAT` | 0..255 | Original SAM formant transformations |

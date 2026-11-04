@@ -1,6 +1,6 @@
 # Robot SAM firmware user manual
 
-**Firmware version: 0.2.1 · Board: Waveshare RP2040-Zero**
+**Firmware version: 0.3.0 · Board: Waveshare RP2040-Zero**
 
 Robot SAM converts text into deliberately electronic, 1980s-style speech.
 Select a character or configure its voice once, then send ordinary text.
@@ -50,7 +50,7 @@ SAY Hello, my friend!
 ```text
 ACCEPTED
 STARTED
-DONE underruns=0
+DONE underruns=0 clipped=0
 ```
 
 Wait for `DONE` before sending another speech request. If the firmware reports
@@ -89,6 +89,10 @@ either speaker terminal to Pico ground or a grounded audio input.
 
 The MAX98357A accepts 2.5–5.5 V. A 5 V supply generally provides more available
 speaker power than 3.3 V. Its digital inputs still use the Pico's 3.3 V signals.
+The amplifier's advertised 3 W generally refers to a 4 ohm load at 5 V under
+specified distortion conditions. An 8 ohm speaker is valid but usually allows
+nearer 1–2 W maximum. A speaker's 3 W marking is its power-handling rating,
+not a promise of loudness; sensitivity and mounting also matter.
 
 On the Waveshare RP2040-Zero, the **5V pin is USB VBUS** and is powered while
 USB is connected. It can supply the amplifier if the USB source and cable
@@ -103,9 +107,38 @@ on the 5V pin arrangement.
 
 ### Gain, volume, and shutdown
 
-**Version 0.2.1 has no software volume or gain control.** `SET VOLUME` and
-`SET GAIN` are not supported. There is no firmware-controlled SD/mute pin.
-`STOP` stops speech production/playback; it does not shut down the amplifier.
+**Version 0.3.0 adds digital volume and boost on both I2S and PWM:**
+
+```text
+SET VOLUME 200
+SAY All systems are operational.
+```
+
+| VOLUME | Result |
+| --- | --- |
+| 0 | Digital mute |
+| 50 | Half the original sample amplitude |
+| 100 | Original 0.2.1 output level; boot default |
+| 200 | 2× sample amplitude, approximately +6 dB before clipping |
+| 400 | Maximum 4× amplitude boost, approximately +12 dB before clipping |
+
+The range is 0–400 inclusive, in percent of the original amplitude. This is
+not a watts setting or a percentage of the amplifier's rated power. Original
+SAM output already reaches full-scale peaks, so boosting increases average
+level by clipping some peaks. Start at 150 or 200, then compare. If distortion
+is excessive, reduce the setting. Samples saturate rather than wrapping.
+
+Volume is a **master output setting**, independent of character presets.
+CHARACTER changes do not reset it. It can change during speech, but buffered
+samples keep their previous level: allow roughly 0.1 second for already
+prepared audio. It resets to 100 on reboot and is not stored in desktop
+character profile files. STATUS reports `volume` and `clipped`; DONE/STOPPED
+also report `clipped`, counting generated samples limited at full scale during
+the current/last request, including samples later discarded by STOP.
+
+The control is entirely digital: **no GAIN-pin or GPIO11 connection is needed**.
+`SET GAIN` is not supported. There is no firmware-controlled SD/mute pin.
+STOP stops speech; it does not shut down the amplifier.
 
 Leave the module's GAIN and SD pins at their defaults for initial testing.
 GPIO11 is not used for amplifier gain by the current firmware. Connecting
@@ -162,7 +195,7 @@ Checksums for the repository's downloads are in [SHA256SUMS](../downloads/SHA256
 The boot message is:
 
 ```text
-READY robot-sam 0.2.1 audio=I2S rate=22050
+READY robot-sam 0.3.0 audio=I2S rate=22050
 ```
 
 The PWM build reports `audio=PWM`. USB may connect after the banner was sent;
@@ -209,7 +242,7 @@ replies/events are mirrored to both outputs. Use one controlling host at a
 time: there are no host addresses, request IDs, or ownership locks.
 
 Slow UART rates, compact command aliases, and a BUSY pin are design goals,
-**not features in 0.2.1**. An old robot limited to 1200–9600 baud will need a
+**not features in 0.3.0**. An old robot limited to 1200–9600 baud will need a
 future firmware update or an intermediate controller.
 
 ## 5. Command reference
@@ -228,7 +261,7 @@ Lists the available command forms. Does not change settings.
 Returns current state and configuration, for example after a fresh I2S boot:
 
 ```text
-IDLE audio=I2S underruns=0 pitch=58 speed=70 mouth=145 throat=135 expression=65 metallic=0 roughness=0 sing=0 rules=0
+IDLE audio=I2S underruns=0 volume=100 clipped=0 pitch=58 speed=70 mouth=145 throat=135 expression=65 metallic=0 roughness=0 sing=0 rules=0
 ```
 
 `BUSY` replaces `IDLE` during a request. Settings displayed are the current
@@ -245,7 +278,7 @@ CHARACTER COMPANION
 
 Replies `OK` or `ERR unknown character`. Loading a preset replaces **all eight
 voice settings**, including effects, expression, and singing mode. It preserves
-custom pronunciation entries. There is no user-defined preset-name storage yet.
+custom pronunciation entries and the separate master VOLUME setting. There is no user-defined preset-name storage yet.
 
 ### `SET parameter value`
 
@@ -257,8 +290,9 @@ SET SING 0
 ```
 
 Use a nonnegative decimal integer in the parameter's range. Replies `OK` or
-`ERR invalid setting`. Parameters and ranges are in section 6. Settings can
-change while busy, but apply only to subsequent requests.
+`ERR invalid setting`. Parameters and ranges are in section 6. Voice settings
+can change while busy but apply only to subsequent requests. Master VOLUME
+also affects newly generated samples in the running request, after buffering.
 
 ### `PRONOUNCE term=replacement words`
 
@@ -301,7 +335,7 @@ Use section 8 for notation and limitations.
 ### `STOP`
 
 If busy, replies `OK stopping`, cancels production, and discards ready audio
-buffers. A later `STOPPED underruns=N` confirms completion of the stop.
+buffers. A later `STOPPED underruns=N clipped=M` confirms completion of the stop.
 If already idle, replies `OK idle` with no later STOPPED event required.
 
 Some audio is already scheduled for DMA playback. It can take approximately
@@ -316,6 +350,7 @@ Wait for `STOPPED` before sending replacement speech.
 
 | Parameter | Range | Meaning |
 | --- | --- | --- |
+| `VOLUME` | 0–400 | Master output percent; 0=mute, 100=original, above 100=boost |
 | `PITCH` | 0–255 | SAM pitch period; lower generally sounds higher |
 | `SPEED` | 0–255 | SAM timing parameter; higher generally sounds slower |
 | `MOUTH` | 0–255 | Original SAM formant transformation |
@@ -563,15 +598,19 @@ SET ROUGHNESS 0
 | `OK` | A configuration command succeeded |
 | `ACCEPTED` | A speech request was handed to the worker; validation can still fail |
 | `STARTED` | Planning succeeded and synthesis started; audio need not be audible yet |
-| `DONE underruns=N` | All scheduled speech blocks completed DMA playback |
+| `DONE underruns=N clipped=M` | All scheduled speech blocks completed DMA playback |
 | `OK stopping` | A busy request was asked to stop |
-| `STOPPED underruns=N` | The worker returned and queued/scheduled blocks were drained |
+| `STOPPED underruns=N clipped=M` | The worker returned and queued/scheduled blocks were drained |
 | `OK idle` | STOP was received while idle |
 | `IDLE ...` / `BUSY ...` | STATUS result |
 | `ERR ...` | A command, planning step, or synthesis operation failed |
 
 I2S can retain a few samples in its peripheral/DAC pipeline after DMA finishes.
 `DONE` is not confirmation of analog speaker output or a functioning amplifier.
+
+`clipped` counts generated samples saturated by volume boost; it resets per
+request. Clipping can be expected above 100 and can increase perceived loudness
+at the cost of distortion. It is separate from underruns.
 
 Underruns count silence blocks scheduled after playback began while the
 producer was still active. They reset per speech request. Aim for zero and
@@ -588,7 +627,9 @@ counter does not detect every possible I2S FIFO or analog audio problem.
 
 There is no exposed speech queue. A new SAY or PHONEMES during a request is
 rejected with `ERR busy`. Configuration commands remain usable, but the
-running request keeps the settings/dictionary snapshot taken at acceptance.
+running request keeps the voice/dictionary snapshot taken at acceptance.
+Master VOLUME is the exception: it applies to subsequently generated samples
+even during the running request, subject to buffered-audio latency.
 STATUS, STOP, HELP, and their replies may interleave with speech events.
 
 Do not paste a whole performance script without pacing. A serial terminal's
@@ -658,7 +699,8 @@ submission, not successful pronunciation or guaranteed audio output.
 | ERR after editing a line | Avoid sending backspace/escape keys directly; compose a clean line before transmission |
 | DONE but no sound | Check audio=I2S, firmware-version pin mapping, amplifier power/ground, speaker connection, and SD not being held low |
 | Clicks or broken speech | Check supply, wiring, underruns, and whether coarse segment joins or effects explain the sound |
-| Loud distortion | Reduce amplifier hardware gain, check speaker/load and supply, and disable added effects for comparison |
+| Loud distortion | Reduce VOLUME if boosted, check amplifier hardware gain, speaker/load and supply, and disable added effects |
+| Speech is too quiet | Check VOLUME, 5 V amplifier power, speaker impedance/sensitivity and hardware gain; try VOLUME 150 or 200 |
 | Reset during speech | Check supply current and wiring; do not power the speaker amplifier from the Pico's 3.3 V regulator |
 | Wrong pronunciation | Test CLASSIC and a PRONOUNCE override, or use PHONEMES |
 | Settings disappeared | Reset reloads COMPANION and clears custom pronunciation rules; replay host initialization |
@@ -697,7 +739,7 @@ cmake -S firmware -B build/custom-i2s -DCMAKE_BUILD_TYPE=Release \
 cmake --build build/custom-i2s -j2
 ```
 
-`ROBOT_I2S_CLOCK_PIN` specifies BCLK; **LRC is always BCLK − 1** in 0.2.1.
+`ROBOT_I2S_CLOCK_PIN` specifies BCLK; **LRC is always BCLK − 1** in 0.3.0.
 DIN can use another available GPIO. Active audio pins must not overlap UART.
 Pin changes are compile-time, not runtime. When upgrading a previous build,
 explicitly set the new clock pin or use a fresh directory: CMake preserves
@@ -718,7 +760,7 @@ electrical, and sustained-operation testing.
 
 These are not hidden commands; they are absent from the supplied firmware:
 
-- Software volume/gain control, potentiometer input, and SD-pin control.
+- Hardware GAIN-pin control, potentiometer input, and SD-pin control. Digital VOLUME is implemented.
 - Baud selection, slow-serial protocol support, short command aliases, and BUSY pin.
 - I2C/SPI command transports. **I2S audio is implemented; I2C control is not.**
 - Flash-saved settings, custom named character banks, dictionary deletion, and

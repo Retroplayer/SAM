@@ -1,21 +1,26 @@
 #include "robot.h"
+#include "robot_pcm.h"
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct { FILE *file; uint32_t count; } Wave;
+static unsigned master_volume=ROBOT_VOLUME_DEFAULT;
+typedef struct { FILE *file; uint32_t count, clipped; unsigned volume; } Wave;
 static void little(FILE *f, uint32_t value, unsigned bytes) {
     while (bytes--) {fputc((int)(value&255),f);value>>=8;}
 }
 static bool sample(void *context, uint8_t value) {
     Wave *w=context;
+    bool clipped;
+    value=robot_pcm8(value,w->volume,&clipped);
+    if (clipped) w->clipped++;
     if (w->count==UINT32_MAX-36) return false;
     if (fputc(value,w->file)==EOF) return false;
     w->count++; return true;
 }
 static bool speak(const RobotPlan *p, const char *path) {
-    Wave w={fopen(path,"wb"),0};
+    Wave w={.file=fopen(path,"wb"),.volume=master_volume};
     if (!w.file) {perror(path);return false;}
     fwrite("RIFF",1,4,w.file); little(w.file,0,4); fwrite("WAVEfmt ",1,8,w.file);
     little(w.file,16,4);little(w.file,1,2);little(w.file,1,2);
@@ -29,7 +34,7 @@ static bool speak(const RobotPlan *p, const char *path) {
     little(w.file,w.count,4);
     if (fclose(w.file)) ok=false;
     if (!ok) {remove(path);fprintf(stderr,"ERR synthesis or WAV write failed\n");return false;}
-    printf("DONE %s samples=%u\n",path,w.count);return true;
+    printf("DONE %s samples=%u clipped=%u\n",path,w.count,w.clipped);return true;
 }
 static bool plan_say(Robot *r, const char *text, bool phonetic, bool inspect, const char *path) {
     RobotPlan plan;
@@ -44,6 +49,7 @@ static void help(void) {
          "Console commands (case sensitive):\n"
          "  CHARACTER COMPANION|GUARDIAN|ENFORCER|DICTATOR|MALFUNCTION|CLASSIC\n"
          "  SET PITCH|SPEED|MOUTH|THROAT|EXPRESSION|METALLIC|ROUGHNESS|SING number\n"
+         "  SET VOLUME 0..400 (100=original level, 0=mute)\n"
          "  PRONOUNCE term=spoken words\n"
          "  SAVE_CHARACTER file\n  LOAD_CHARACTER file\n"
          "  SAY text\n  PHONEMES SAM phonemes\n  STATUS\n  HELP\n  QUIT\n"
@@ -68,13 +74,17 @@ static int console(Robot *r, bool inspect) {
         } else if (!strncmp(line,"LOAD_CHARACTER ",15)) {
             ok=robot_profile_load(r,line+15); if (ok) puts("OK");
         }
-        else if (!strcmp(line,"STATUS")) printf("IDLE pitch=%u speed=%u mouth=%u throat=%u expression=%u metallic=%u roughness=%u sing=%u rules=%u\n",r->voice.pitch,r->voice.speed,r->voice.mouth,r->voice.throat,r->voice.expression,r->voice.metallic,r->voice.roughness,r->voice.sing,r->rule_count);
+        else if (!strcmp(line,"STATUS")) printf("IDLE volume=%u pitch=%u speed=%u mouth=%u throat=%u expression=%u metallic=%u roughness=%u sing=%u rules=%u\n",master_volume,r->voice.pitch,r->voice.speed,r->voice.mouth,r->voice.throat,r->voice.expression,r->voice.metallic,r->voice.roughness,r->voice.sing,r->rule_count);
         else if (!strncmp(line,"CHARACTER ",10)) {
             ok=robot_character(r,line+10); if (ok) puts("OK");
         } else if (!strncmp(line,"SET ",4)) {
             char key[24],value[24],extra; unsigned long v; char *end;
             ok=sscanf(line+4,"%23s %23s %c",key,value,&extra)==2;
-            if (ok) {errno=0;v=strtoul(value,&end,10);ok=!errno && !*end && value[0]!='-' && v<=255 && robot_set(r,key,(unsigned)v);}
+            if (ok) {
+                errno=0;v=strtoul(value,&end,10);ok=!errno && !*end && value[0]!='-' && v<=ROBOT_VOLUME_MAX;
+                if (ok && robot_volume_key(key)) master_volume=(unsigned)v;
+                else if (ok) ok=v<=255 && robot_set(r,key,(unsigned)v);
+            }
             if (ok) puts("OK");
         } else if (!strncmp(line,"PRONOUNCE ",10)) {
             char *sep=strchr(line+10,'=');ok=sep!=NULL;

@@ -26,7 +26,7 @@ build/robot.o: src/robot.c include/robot.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 -c $< -o $@
 build/render.o: src/render.c include/robot.h $(REF)/sam.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 -c $< -o $@
-build/main.o: src/main.c include/robot.h | build
+build/main.o: src/main.c include/robot.h include/robot_pcm.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 -c $< -o $@
 build/profile.o: src/profile.c include/robot.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 -c $< -o $@
@@ -37,8 +37,11 @@ build/robot-sam: build/robot.o build/render.o build/main.o build/profile.o $(REF
 	$(CC) $(CFLAGS) $^ -o $@
 build/test-robot: tests/test_robot.c build/robot.o | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 $^ -o $@
-test: build/test-robot build/robot-sam
+build/test-pcm: tests/test_pcm.c include/robot_pcm.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 $< -o $@
+test: build/test-robot build/test-pcm build/robot-sam
 	./build/test-robot
+	./build/test-pcm
 	python3 tests/test_audio.py
 sanitize: | build
 	$(CC) $(CPPFLAGS) -O1 -g -std=c11 $(WARN) -fsanitize=address,undefined -fno-omit-frame-pointer tests/test_robot.c src/robot.c -o build/test-sanitize
