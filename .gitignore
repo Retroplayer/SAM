@@ -4,3 +4,4 @@
 !/demos/*.wav
 *.uf2
 !/downloads/*.uf2
+!/downloads/v*/*.uf2

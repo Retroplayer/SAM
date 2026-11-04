@@ -15,4 +15,7 @@ uint32_t audio_underruns(void);
 bool audio_set_volume(unsigned percent);
 unsigned audio_volume(void);
 uint32_t audio_clipped(void);
+/* Core 0, idle only: stop DMA/PIO before XIP flash becomes unavailable. */
+bool audio_flash_pause(void);
+void audio_flash_resume(void);
 #endif

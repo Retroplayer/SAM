@@ -22,7 +22,8 @@ timing have been checked; physical-board playback and electrical timing have not
    USB serial does not require a particular baud-rate setting.
 4. Send newline-terminated commands. If the boot banner was missed, send `STATUS`.
 
-The board defaults to `COMPANION` after reset. There is no automatic boot speech.
+Without a valid autoloaded snapshot, the board starts as `COMPANION` at volume
+100 with no custom pronunciation rules. There is no automatic boot speech.
 
 ## Default wiring
 
@@ -80,7 +81,7 @@ first. Boost saturates peaks rather than wrapping; STATUS and DONE/STOPPED
 report `clipped`, a generated-sample clipping count reset per request.
 
 Volume is independent of CHARACTER, remains adjustable while speaking, and
-resets on reboot. Already prepared buffers retain their previous level for
+restores from an autoloaded snapshot, or defaults to 100 at boot. Already prepared buffers retain their previous level for
 roughly up to 0.1 second. No hardware GAIN connection is required. There is
 still no firmware SD-pin control. The amplifier's 3 W rating is maximum power
 under specified conditions, not guaranteed output for every speaker or supply.
@@ -119,8 +120,24 @@ normalization. `HELP` lists commands.
 Replies/events are mirrored to USB and UART. Each has its own receive buffer,
 so simultaneous input does not concatenate bytes across transports. Use one
 controlling host at a time to avoid conflicting commands. Both CRLF and LF work.
-Settings persist in RAM until reset; desktop file-based `SAVE_CHARACTER` and
-`LOAD_CHARACTER` are not available in this firmware.
+Settings change in RAM until `SAVE_CONFIG` persists them. A valid snapshot
+with AUTOLOAD 1 (default) restores voice, master volume, and pronunciation rules
+at boot. `LOAD_CONFIG` restores manually; `ERASE_CONFIG` removes the snapshot;
+`DEFAULTS` resets only RAM. `SET AUTOLOAD 0` plus SAVE_CONFIG disables automatic
+restoration without deleting the saved voice. These storage commands require
+IDLE. Desktop file-based SAVE_CHARACTER/LOAD_CHARACTER are separate commands.
+
+## Flash configuration (0.4.0)
+
+Use `SAVE_CONFIG`, `LOAD_CONFIG`, `ERASE_CONFIG`, `DEFAULTS`, and
+`SET AUTOLOAD 0|1`; see the [user manual](../docs/FIRMWARE_MANUAL.md#flash-configuration-commands-040).
+All four storage/reset commands are rejected while busy. Saves skip unchanged
+payloads. Two 4 KiB sectors at flash offset 2088960 are excluded from the
+application linker map and UF2 output. CRC-protected records alternate sectors.
+
+The SDK flash-safe API parks core 1; both cores' interrupts/XIP activity and
+idle DMA/PIO playback are coordinated before erase/program, and audio is
+restarted afterward. Wait for acknowledgement before sending other commands.
 
 ## Build
 
@@ -192,5 +209,5 @@ checks also verify that five invalid backend/pin assignments are rejected.
 
 Before relying on hardware, verify both outputs with a board and amplifier;
 check BCLK/LRCLK with a scope or logic analyzer, audition speech, exercise STOP,
-and monitor underruns. I2C/SPI command transports and flash profile storage are
-separate future features.
+and monitor underruns. I2C/SPI command transports are future features. Flash persistence is new in
+0.4.0 and needs physical save/load/power-cycle validation.

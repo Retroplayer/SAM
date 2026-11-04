@@ -1,6 +1,6 @@
 # Robot SAM firmware user manual
 
-**Firmware version: 0.3.0 · Board: Waveshare RP2040-Zero**
+**Firmware version: 0.4.0 · Board: Waveshare RP2040-Zero**
 
 Robot SAM converts text into deliberately electronic, 1980s-style speech.
 Select a character or configure its voice once, then send ordinary text.
@@ -54,8 +54,8 @@ DONE underruns=0 clipped=0
 ```
 
 Wait for `DONE` before sending another speech request. If the firmware reports
-`ERR`, use the error reference below. When restarting the board, repeat your
-character setup: settings are not saved across resets.
+`ERR`, use the error reference below. Use SAVE_CONFIG after tuning to restore the setup automatically on later boots.
+Changes remain temporary until explicitly saved.
 
 ## 2. Hardware, power, and audio wiring
 
@@ -131,8 +131,9 @@ is excessive, reduce the setting. Samples saturate rather than wrapping.
 Volume is a **master output setting**, independent of character presets.
 CHARACTER changes do not reset it. It can change during speech, but buffered
 samples keep their previous level: allow roughly 0.1 second for already
-prepared audio. It resets to 100 on reboot and is not stored in desktop
-character profile files. STATUS reports `volume` and `clipped`; DONE/STOPPED
+prepared audio. On reboot it is restored from a valid saved configuration if autoload is
+enabled; otherwise it starts at 100. It is not stored in desktop character
+profile files. STATUS reports `volume` and `clipped`; DONE/STOPPED
 also report `clipped`, counting generated samples limited at full scale during
 the current/last request, including samples later discarded by STOP.
 
@@ -195,7 +196,7 @@ Checksums for the repository's downloads are in [SHA256SUMS](../downloads/SHA256
 The boot message is:
 
 ```text
-READY robot-sam 0.3.0 audio=I2S rate=22050
+READY robot-sam 0.4.0 audio=I2S rate=22050
 ```
 
 The PWM build reports `audio=PWM`. USB may connect after the banner was sent;
@@ -242,7 +243,7 @@ replies/events are mirrored to both outputs. Use one controlling host at a
 time: there are no host addresses, request IDs, or ownership locks.
 
 Slow UART rates, compact command aliases, and a BUSY pin are design goals,
-**not features in 0.3.0**. An old robot limited to 1200–9600 baud will need a
+**not features in 0.4.0**. An old robot limited to 1200–9600 baud will need a
 future firmware update or an intermediate controller.
 
 ## 5. Command reference
@@ -261,12 +262,15 @@ Lists the available command forms. Does not change settings.
 Returns current state and configuration, for example after a fresh I2S boot:
 
 ```text
-IDLE audio=I2S underruns=0 volume=100 clipped=0 pitch=58 speed=70 mouth=145 throat=135 expression=65 metallic=0 roughness=0 sing=0 rules=0
+IDLE audio=I2S underruns=0 volume=100 clipped=0 pitch=58 speed=70 mouth=145 throat=135 expression=65 metallic=0 roughness=0 sing=0 rules=0 saved=0 autoload=1
 ```
 
 `BUSY` replaces `IDLE` during a request. Settings displayed are the current
 configuration for future requests; a running request retains its own snapshot.
 `rules` is the number of custom pronunciation entries, not built-in entries.
+`saved=1` means a valid snapshot exists in flash; it does not mean current RAM
+settings match that snapshot. `autoload` is the current RAM boot-policy setting;
+changes to that policy take effect at the next boot only after SAVE_CONFIG.
 
 ### `CHARACTER name`
 
@@ -344,6 +348,78 @@ The synthesizer can finish computing its current segment before returning.
 These are design expectations, not a measured end-to-end stop guarantee.
 Wait for `STOPPED` before sending replacement speech.
 
+### Flash configuration commands (0.4.0)
+
+There is one saved robot configuration, including all eight voice settings,
+master volume, the custom pronunciation dictionary, and the autoload policy.
+There are no named slots yet. The audio backend and GPIO wiring are still
+selected by the flashed firmware, not by the saved configuration.
+
+All four commands below require IDLE; otherwise they return `ERR busy`.
+
+| Command | Result |
+| --- | --- |
+| `SAVE_CONFIG` | Store current settings; replies `OK saved`, or `OK unchanged` if already identical |
+| `LOAD_CONFIG` | Restore the saved settings, even with autoload disabled; replies `OK loaded` |
+| `ERASE_CONFIG` | Remove both saved records; leave current RAM settings unchanged; replies `OK erased` |
+| `DEFAULTS` | Restore COMPANION, volume 100, no custom rules, and AUTOLOAD 1 in RAM; leave flash unchanged; replies `OK defaults` |
+
+`LOAD_CONFIG` returns `ERR no saved configuration` if neither stored record is
+valid. Save/erase failures return `ERR flash save failed` or `ERR flash erase
+failed`. If a write fails, do not assume the new settings were saved; use
+LOAD_CONFIG/STATUS to inspect the recoverable state. If the device stops
+responding, reboot and check STATUS before retrying.
+
+Control the next boot with:
+
+```text
+SET AUTOLOAD 1
+SAVE_CONFIG
+```
+
+AUTOLOAD accepts 0 or 1, case-insensitively like other SET keys. It is a
+configuration setting, not a voice parameter. With AUTOLOAD 1 saved, boot
+restores the snapshot. With AUTOLOAD 0 saved, boot uses factory voice/volume
+and an empty dictionary; the saved snapshot remains available to LOAD_CONFIG.
+After LOAD_CONFIG, its saved autoload policy is restored too.
+
+Save only after tuning, rather than after every SET. Repeating SAVE_CONFIG
+with identical settings does not erase/program flash. Flash operations pause
+idle audio DMA and I2S clocks and coordinate both CPU cores while XIP flash
+is unavailable. Wait for the reply before sending anything else: USB and UART
+are not serviced normally during the write. Allow several seconds in a host
+application; do not stream commands during saving or erasing.
+
+The last 8 KiB of the Zero's 2 MiB flash is reserved by the linker. Two
+alternating, versioned records include a CRC and commit marker. During a save,
+the prior valid record is retained until the new record validates. If one is
+incomplete or corrupt, the newest valid record is loaded. If neither is valid,
+the firmware boots factory defaults. This does not replace a host-side backup.
+An interrupted explicit ERASE_CONFIG can leave an old record recoverable;
+wait for `OK erased` before treating erasure as complete.
+
+Normal supplied UF2 updates write the application region and leave the saved
+sectors alone. A full-chip erase, another application using those sectors, or
+an incompatible future schema can lose or invalidate settings. This version
+supports the Zero's 2 MiB flash layout only. Loading the 0.3.0 fallback ignores
+saved settings; it has no flash configuration commands.
+
+#### Hardware acceptance test
+
+1. Stop/wait for any speech to finish.
+2. Select your voice, volume, and pronunciation overrides.
+3. Send SET AUTOLOAD 1, then SAVE_CONFIG; wait for OK saved/unchanged.
+4. Disconnect and reconnect power. Send STATUS: verify the saved parameters,
+   volume, rule count, saved=1, and autoload=1.
+5. Speak a phrase using an override; confirm audio still works after a save.
+6. Change a parameter without saving, then LOAD_CONFIG; confirm it is restored.
+7. Optionally save AUTOLOAD 0, power-cycle, confirm factory startup, then use
+   LOAD_CONFIG to recover the saved voice. Re-enable AUTOLOAD and save if desired.
+
+To remove persistent settings and return to a factory boot, send DEFAULTS and
+ERASE_CONFIG while idle, waiting for each reply. DEFAULTS alone is temporary;
+DEFAULTS followed by SAVE_CONFIG deliberately saves factory settings.
+
 ## 6. Voice settings and presets
 
 ### Settings
@@ -351,6 +427,7 @@ Wait for `STOPPED` before sending replacement speech.
 | Parameter | Range | Meaning |
 | --- | --- | --- |
 | `VOLUME` | 0–400 | Master output percent; 0=mute, 100=original, above 100=boost |
+| `AUTOLOAD` | 0 or 1 | Boot policy; persist with SAVE_CONFIG; not a voice setting |
 | `PITCH` | 0–255 | SAM pitch period; lower generally sounds higher |
 | `SPEED` | 0–255 | SAM timing parameter; higher generally sounds slower |
 | `MOUTH` | 0–255 | Original SAM formant transformation |
@@ -386,13 +463,13 @@ but punctuation pauses and text normalization still occur in SAY mode.
 | DICTATOR | 94 | 90 | 110 | 185 | 45 | 45 | 20 | 0 |
 | MALFUNCTION | 100 | 96 | 100 | 195 | 80 | 70 | 65 | 1 |
 
-The startup preset is COMPANION. Presets are starting points, not reproductions
+Without a valid autoloaded configuration, the startup preset is COMPANION. Presets are starting points, not reproductions
 of particular toys or television voices. CLASSIC removes added expression and
 effects, but still uses the new normalization layer; it is not bit-exact
 original-machine emulation.
 
-To preserve your custom setup for reuse, keep its commands in a host-side
-text file and resend them after reset. Selecting another preset overwrites
+To preserve your custom setup, use SAVE_CONFIG while idle. Keep a host-side
+copy of the setup commands as a portable backup. Selecting another preset overwrites
 your voice adjustments, so apply the preset first, then SET commands.
 
 ## 7. Pronunciation and automatic delivery
@@ -424,9 +501,9 @@ Different voice settings can affect perceived pronunciation.
 | Replacement length | 1–63 ASCII characters |
 | Replacement characters | Letters, spaces, apostrophes |
 
-Adding the same term again updates its existing slot. Rules survive CHARACTER
-changes but not reset. There is no delete/clear command; reset clears the whole
-custom dictionary. To neutralize an entry without resetting, replace it with
+Adding the same term again updates its existing slot. Rules survive CHARACTER changes and are included in SAVE_CONFIG. They are
+restored on boot when autoload is enabled. There is no individual delete
+command; DEFAULTS clears the RAM dictionary without erasing flash. To neutralize an entry without resetting, replace it with
 an appropriate spelling, understanding that the slot remains occupied.
 Phoneme-based dictionary entries are not supported in this version.
 
@@ -703,9 +780,9 @@ submission, not successful pronunciation or guaranteed audio output.
 | Speech is too quiet | Check VOLUME, 5 V amplifier power, speaker impedance/sensitivity and hardware gain; try VOLUME 150 or 200 |
 | Reset during speech | Check supply current and wiring; do not power the speaker amplifier from the Pico's 3.3 V regulator |
 | Wrong pronunciation | Test CLASSIC and a PRONOUNCE override, or use PHONEMES |
-| Settings disappeared | Reset reloads COMPANION and clears custom pronunciation rules; replay host initialization |
+| Settings disappeared | Use SAVE_CONFIG and SET AUTOLOAD 1 before reboot; without a valid autoloaded snapshot, boot uses factory settings |
 | Voice changed unexpectedly | CHARACTER replaces all voice settings; apply SET commands after it |
-| SAVE_CHARACTER is rejected | That command belongs to the desktop tool, not the firmware |
+| SAVE_CHARACTER is rejected | Use firmware SAVE_CONFIG/LOAD_CONFIG; desktop SAVE_CHARACTER/LOAD_CHARACTER are file-based commands |
 
 When reporting a fault, include firmware version/backend, amplifier and speaker,
 power source, the complete setup commands and phrase, STATUS output, and all
@@ -727,6 +804,9 @@ make firmware-i2s
 make firmware-test
 ```
 
+The hardware-tested 0.3.0 fallback is kept under [downloads/v0.3.0](../downloads/v0.3.0/README.md).
+New flash persistence needs its own physical power-cycle test.
+
 The results are `build/pwm/robot-sam-PWM.uf2` and
 `build/i2s/robot-sam-I2S.uf2`. Read [THIRD_PARTY.md](../THIRD_PARTY.md) for
 reference-engine licensing and included notices.
@@ -739,7 +819,7 @@ cmake -S firmware -B build/custom-i2s -DCMAKE_BUILD_TYPE=Release \
 cmake --build build/custom-i2s -j2
 ```
 
-`ROBOT_I2S_CLOCK_PIN` specifies BCLK; **LRC is always BCLK − 1** in 0.3.0.
+`ROBOT_I2S_CLOCK_PIN` specifies BCLK; **LRC is always BCLK − 1** in 0.4.0.
 DIN can use another available GPIO. Active audio pins must not overlap UART.
 Pin changes are compile-time, not runtime. When upgrading a previous build,
 explicitly set the new clock pin or use a fresh directory: CMake preserves
@@ -753,7 +833,9 @@ Refer to the [firmware development notes](../firmware/README.md) for build detai
 Firmware tests validate UF2 structure/content, simulate the shipped I2S PIO
 instruction timing, and reject invalid pin/backend configurations. `make test`
 checks desktop speech/planning; `make sanitize` checks the planner under
-AddressSanitizer/UBSan. These are not substitutes for physical-board audio,
+AddressSanitizer/UBSan. Native configuration tests also simulate interrupted
+programming, corrupted records, sequence rollover, and the real storage adapter
+against mocked NOR flash. These are not substitutes for physical-board audio,
 electrical, and sustained-operation testing.
 
 ## 14. Current omissions
@@ -763,8 +845,9 @@ These are not hidden commands; they are absent from the supplied firmware:
 - Hardware GAIN-pin control, potentiometer input, and SD-pin control. Digital VOLUME is implemented.
 - Baud selection, slow-serial protocol support, short command aliases, and BUSY pin.
 - I2C/SPI command transports. **I2S audio is implemented; I2C control is not.**
-- Flash-saved settings, custom named character banks, dictionary deletion, and
-  firmware SAVE_CHARACTER/LOAD_CHARACTER.
+- Custom named character banks and individual pronunciation deletion. A single
+  flash configuration is implemented through SAVE_CONFIG/LOAD_CONFIG; desktop
+  SAVE_CHARACTER/LOAD_CHARACTER remain separate file-based commands.
 - Queued speech, runtime PWM/I2S switching, request IDs, and remote reset.
 - Independent formant controls and continuous phoneme-level pitch envelopes.
 - Speech recognition, microphone input, voice sampling, and recording playback.

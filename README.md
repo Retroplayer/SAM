@@ -12,13 +12,19 @@ delivery to a SAM reference backend. No network or AI service is used at runtime
 builds with default PWM/DMA audio or selectable PIO/DMA I2S audio, plus UART and
 USB serial commands. Both UF2 variants are available in [downloads](downloads/README.md).
 They are cross-compiled and structurally checked, but have not been tested on a
-physical board. I2C/SPI command transports and embedded character persistence
-are not implemented. Presets are initial tuning candidates, not verified
+physical board. I2C/SPI command transports are not implemented. A single flash-saved
+configuration is supported in 0.4.0. Presets are initial tuning candidates, not verified
 reproductions of particular toys.
 
-**Volume:** firmware 0.3.0 supports `SET VOLUME 0..400` on both outputs.
+**Volume:** firmware 0.4.0 supports `SET VOLUME 0..400` on both outputs.
 100 is the original level; try 200 for boost, 0 for mute. Boost may clip peaks;
 STATUS and completion events report clipping. No amplifier GAIN wiring is needed.
+
+**Persistence (0.4.0):** tune the voice, volume, and pronunciations, then send
+`SAVE_CONFIG` while idle. The saved setup autoloads after power-off by default.
+Use `LOAD_CONFIG` to restore, `DEFAULTS` for temporary factory settings, and
+`ERASE_CONFIG` to remove the saved snapshot. See the manual for AUTOLOAD policy.
+The hardware-tested [0.3.0 fallback](downloads/v0.3.0/README.md) remains available.
 
 See [firmware setup, wiring, and commands](firmware/README.md).
 The current I2S download uses **LRC/WS GP8, BCLK GP9, and DIN GP10**.
@@ -101,7 +107,8 @@ In a later session, use `LOAD_CHARACTER build/my-robot.profile` and continue wit
 `SAY`. Files save the full voice and custom pronunciation dictionary; master VOLUME
 is an output setting and is not included. Loading an
 invalid file leaves the current character untouched. These are desktop files;
-embedded flash persistence is not implemented yet.
+embedded flash persistence instead uses SAVE_CONFIG/LOAD_CONFIG as described
+in the firmware manual. The desktop SAVE_CHARACTER commands use host files.
 
 Console `SAY` commands write `speech-001.wav`, `speech-002.wav`, etc. in the current
 directory. Rendering is synchronous. There is no command queue or live STOP in
@@ -192,4 +199,5 @@ claim to sanitize the entire third-party engine or validate listening quality.
 The hardware milestone now needs a physical RP2040-Zero audition: verify PWM and
 I2S waveforms, STOP behavior, and underrun counts. The firmware uses buffered DMA
 audio, keeps serial commands responsive on core 0, and performs planning and
-synthesis on core 1. I2C and SPI command transports remain future work.
+synthesis on core 1. I2C and SPI command transports remain future work. Version 0.4.0 adds
+explicit flash saving; test save/load and power-cycle recovery on hardware.

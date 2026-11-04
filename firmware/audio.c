@@ -12,6 +12,8 @@
 
 #ifdef ROBOT_AUDIO_I2S
 #include "i2s.pio.h"
+static PIO output_pio;
+static unsigned output_sm,output_offset;
 #endif
 
 #define BLOCK_SAMPLES 256u
@@ -89,6 +91,7 @@ void audio_init(void) {
     PIO pio=pio0;
     unsigned sm=pio_claim_unused_sm(pio,true);
     unsigned offset=pio_add_program(pio,&robot_i2s_program);
+    output_pio=pio;output_sm=sm;output_offset=offset;
     pio_gpio_init(pio,ROBOT_I2S_DATA_PIN);
     pio_gpio_init(pio,ROBOT_I2S_CLOCK_PIN);
     pio_gpio_init(pio,ROBOT_I2S_CLOCK_PIN-1);
@@ -192,3 +195,40 @@ bool audio_set_volume(unsigned percent) {
 }
 unsigned audio_volume(void) {return atomic_load(&volume);}
 uint32_t audio_clipped(void) {return atomic_load(&clipped_samples);}
+bool audio_flash_pause(void) {
+    if (atomic_load(&producing) || atomic_load(&outstanding)) return false;
+    irq_set_enabled(DMA_IRQ_0,false);
+    for (unsigned i=0;i<2;i++) {
+        dma_channel_set_irq0_enabled(channels[i],false);
+        hw_clear_bits(&dma_hw->ch[channels[i]].ctrl_trig,DMA_CH0_CTRL_TRIG_EN_BITS);
+    }
+    for (unsigned i=0;i<2;i++) dma_channel_abort(channels[i]);
+    dma_hw->ints0=(1u<<channels[0])|(1u<<channels[1]);
+#ifdef ROBOT_AUDIO_I2S
+    pio_sm_set_enabled(output_pio,output_sm,false);
+#else
+    pwm_set_gpio_level(ROBOT_PWM_PIN,128);
+#endif
+    return true;
+}
+void audio_flash_resume(void) {
+#ifdef ROBOT_AUDIO_I2S
+    pio_sm_clear_fifos(output_pio,output_sm);
+    pio_sm_restart(output_pio,output_sm);
+    pio_sm_set_pins(output_pio,output_sm,0);
+    pio_sm_exec(output_pio,output_sm,pio_encode_jmp(output_offset+robot_i2s_offset_entry_point));
+#endif
+    for (unsigned i=0;i<2;i++) {
+        atomic_store(&scheduled[i],-1);
+        dma_channel_set_read_addr(channels[i],silence,false);
+        dma_channel_set_trans_count(channels[i],BLOCK_SAMPLES,false);
+        hw_set_bits(&dma_hw->ch[channels[i]].ctrl_trig,DMA_CH0_CTRL_TRIG_EN_BITS);
+        dma_channel_set_irq0_enabled(channels[i],true);
+    }
+    dma_hw->ints0=(1u<<channels[0])|(1u<<channels[1]);
+    irq_set_enabled(DMA_IRQ_0,true);
+    dma_start_channel_mask(1u<<channels[0]);
+#ifdef ROBOT_AUDIO_I2S
+    pio_sm_set_enabled(output_pio,output_sm,true);
+#endif
+}

@@ -39,9 +39,15 @@ build/test-robot: tests/test_robot.c build/robot.o | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 $^ -o $@
 build/test-pcm: tests/test_pcm.c include/robot_pcm.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 $< -o $@
-test: build/test-robot build/test-pcm build/robot-sam
+build/test-config: tests/test_config.c src/config.c src/robot.c include/robot_config.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 tests/test_config.c src/config.c src/robot.c -o $@
+build/test-storage: tests/test_storage.c firmware/storage.c src/config.c src/robot.c include/robot_config.h | build
+	$(CC) -Itests/mocks -Ifirmware $(CPPFLAGS) $(CFLAGS) $(WARN) -DROBOT_CONFIG_FLASH_OFFSET=2088960 -std=c11 tests/test_storage.c firmware/storage.c src/config.c src/robot.c -o $@
+test: build/test-robot build/test-pcm build/test-config build/test-storage build/robot-sam
 	./build/test-robot
 	./build/test-pcm
+	./build/test-config
+	./build/test-storage
 	python3 tests/test_audio.py
 sanitize: | build
 	$(CC) $(CPPFLAGS) -O1 -g -std=c11 $(WARN) -fsanitize=address,undefined -fno-omit-frame-pointer tests/test_robot.c src/robot.c -o build/test-sanitize
