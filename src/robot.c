@@ -99,13 +99,14 @@ static bool number_words(char *dst, size_t cap, unsigned value) {
     if (!append(dst,cap,tens[value/10])) return false;
     return !(value%10) || append(dst,cap,small[value%10]);
 }
-static bool expand(const Robot *r, Word *w, bool all_caps, const char *previous) {
+static bool expand(const Robot *r,const RobotRule *rules,unsigned rule_count, Word *w, bool all_caps, const char *previous) {
     const char *raw=w->raw;
     unsigned alpha=0, number=0; bool upper=true;
     for (size_t i=0;raw[i];i++) {
         if (isalpha((unsigned char)raw[i])) {alpha++; if (islower((unsigned char)raw[i])) upper=false;}
         if (isdigit((unsigned char)raw[i])) number++;
     }
+    for (unsigned i=0;i<rule_count;i++) if (eq(raw,rules[i].term)) {strcpy(w->spoken,rules[i].spoken);return true;}
     for (unsigned i=0;i<r->rule_count;i++) if (eq(raw,r->rules[i].term)) {
         strcpy(w->spoken,r->rules[i].spoken); return true;
     }
@@ -159,7 +160,7 @@ static bool wh_question(const char *word) {
     return false;
 }
 
-const char *robot_plan(const Robot *r, const char *text, bool phonetic, RobotPlan *out) {
+const char *robot_plan_with_rules(const Robot *r,const RobotRule *rules,unsigned rule_count,const char *text, bool phonetic, RobotPlan *out) {
     Word words[ROBOT_WORDS_MAX]={0};
     Phrase phrases[ROBOT_WORDS_MAX]={0};
     size_t n=strlen(text), count=0; unsigned phrase=0;
@@ -208,7 +209,7 @@ const char *robot_plan(const Robot *r, const char *text, bool phonetic, RobotPla
     if (!count) return "no speakable words";
     for (size_t i=0;i<count;i++) {
         Word *w=&words[i];
-        if (!expand(r,w,all_caps,i?words[i-1].raw:NULL)) {out->count=0;return "pronunciation expansion too long";}
+        if (!expand(r,rules,rule_count,w,all_caps,i?words[i-1].raw:NULL)) {out->count=0;return "pronunciation expansion too long";}
         size_t first=i,last=i;
         while (first>0 && words[first-1].phrase==w->phrase) first--;
         while (last+1<count && words[last+1].phrase==w->phrase) last++;
@@ -235,6 +236,7 @@ const char *robot_plan(const Robot *r, const char *text, bool phonetic, RobotPla
     }
     return NULL;
 }
+const char *robot_plan(const Robot *r,const char *text,bool phonetic,RobotPlan *out){return robot_plan_with_rules(r,NULL,0,text,phonetic,out);}
 void robot_plan_print(const RobotPlan *plan) {
     for (size_t i=0;i<plan->count;i++) {
         const RobotSegment *s=&plan->segments[i];

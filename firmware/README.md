@@ -1,180 +1,42 @@
-# RP2040-Zero firmware
+# RP2040-Zero firmware 0.5.0
 
-For operating instructions, see the **[complete firmware user manual](../docs/FIRMWARE_MANUAL.md)**.
-This page also contains the build and implementation notes.
+**[User manual](../docs/FIRMWARE_MANUAL.md)** · **[UF2 downloads](../downloads/README.md)**
 
-Two **build-time** audio choices share the same speech engine and commands:
+## Outputs and connections
 
-- **PWM**, the default: hardware PWM on GP14, fed by timer-paced DMA.
-- **I2S**: PIO-generated standard Philips I2S, fed by DMA; external DAC or digital
-  amplifier required. No MCLK, device register setup, or chip-specific driver.
+PWM is the build default: GP14, hardware PWM carrier with timer-paced DMA.
+Use a filter and analog amplifier; never drive a speaker directly.
+I2S uses PIO/DMA: LRC GP8, BCLK GP9, DIN GP10. It emits duplicated mono,
+16-bit stereo slots at nominal 22,050 frames/s, with no MCLK or DAC register
+configuration. MAX98357A is a suitable external amplifier. GPIOs are configurable
+at build time; LRC must remain BCLK minus 1, and PWM uses an even GPIO.
 
-Download the prebuilt UF2 files from [downloads](../downloads/README.md).
-These are development builds: compilation, UF2 structure, and simulated I2S bit
-timing have been checked; physical-board playback and electrical timing have not.
-
-## Flash and connect
-
-1. Hold BOOT on the RP2040-Zero while connecting USB (or use its BOOT/RESET
-   sequence) to enter the `RPI-RP2` USB mass-storage bootloader.
-2. Copy the chosen UF2 onto `RPI-RP2`. It reboots into the firmware.
-3. Open the USB CDC serial port, or connect a 3.3 V UART host at **115200, 8N1**.
-   USB serial does not require a particular baud-rate setting.
-4. Send newline-terminated commands. If the boot banner was missed, send `STATUS`.
-
-Without a valid autoloaded snapshot, the board starts as `COMPANION` at volume
-100 with no custom pronunciation rules. There is no automatic boot speech.
-
-## Default wiring
-
-GPIO numbers below are RP2040 GPIO numbers, not physical header pin numbers.
-
-| Connection | GPIO | Direction |
-| --- | --- | --- |
-| UART TX | GP0 | Board to host RX |
-| UART RX | GP1 | Host TX to board |
-| PWM audio | GP14 | Output; PWM build only |
-| I2S DIN/data | GP10 | Output to DAC/amplifier DIN |
-| I2S BCLK | GP9 | Output to DAC/amplifier BCLK |
-| I2S LRCLK/WS | GP8 | Output to DAC/amplifier LRC/WS |
-
-Connect common ground. UART and I2S signals use 3.3 V logic.
-The onboard GP16 RGB LED is not used.
-
-### PWM
-
-GP14 is a switching signal, **not a speaker output**. Feed it through a low-pass
-filter and appropriate AC coupling into an analog amplifier, then the speaker.
-For example, a 2.2 kΩ series resistor and 10 nF capacitor to ground provide a
-first-order filter around 7.2 kHz. The amplifier input may need additional
-filtering, attenuation, or coupling depending on its circuit. Start with low
-amplifier gain. Do not connect a speaker directly to a GPIO.
-
-At the SDK's default 125 MHz system clock, PWM has a carrier of about 488 kHz,
-with an independent DMA sample clock near 22,050 Hz. Idle output is 50% duty
-cycle, corresponding to unsigned PCM silence at 128. This intentionally retains
-SAM's 8-bit amplitude character.
-
-### I2S
-
-A **MAX98357A I2S amplifier module** is a suitable initial candidate. Connect
-GP10 to DIN, GP9 to BCLK, and GP8 to LRC; power the module according to its
-specification and connect its speaker outputs as specified by the module.
-
-Output is master-mode Philips I2S, MSB first, **16-bit signed samples in two
-16-bit slots**, nominally 22,050 frames/s. The mono sample is duplicated into
-both slots; BCLK is nominally 705.6 kHz. The eight-bit SAM sample is expanded to
-16 bits without interpolation. Fractional PIO division introduces a small clock
-rounding error; actual timing still needs measurement on hardware.
-
-The backend does not depend on MAX98357A. Other DACs/amplifiers can work if they
-accept this format and rate, work without MCLK, and need no register setup.
-Devices requiring MCLK, other slot widths, or I2C configuration need additional
-support. Changing backend currently means flashing the other UF2, not sending
-a runtime command.
-
-## Volume (0.3.0)
-
-Use `SET VOLUME 0..400`: 0 mutes, 100 is the previous firmware's level and boot
-default, 200 doubles amplitude, and 400 is maximum 4× boost. Try 150 or 200
-first. Boost saturates peaks rather than wrapping; STATUS and DONE/STOPPED
-report `clipped`, a generated-sample clipping count reset per request.
-
-Volume is independent of CHARACTER, remains adjustable while speaking, and
-restores from an autoloaded snapshot, or defaults to 100 at boot. Already prepared buffers retain their previous level for
-roughly up to 0.1 second. No hardware GAIN connection is required. There is
-still no firmware SD-pin control. The amplifier's 3 W rating is maximum power
-under specified conditions, not guaranteed output for every speaker or supply.
-
-## Commands
-
-```text
-CHARACTER COMPANION
-PRONOUNCE ROS=ross
-SET EXPRESSION 80
-SAY Hello, my friend! The CPU is ready.
-STATUS
-STOP
-CHARACTER DICTATOR
-SAY Remain where you are. ROS is now under my control!
-```
-
-Characters, raw SAM settings, effects, pronunciation rules, and text limits are
-the same as the [desktop prototype](../README.md). `PHONEMES /HEHLOW` bypasses
-normalization. `HELP` lists commands.
-
-- `OK` confirms a character, setting, pronunciation, or STOP command.
-- `ACCEPTED` acknowledges a speech request; worker-side planning can still reject
-  its content with `ERR ...`.
-- `STARTED` means synthesis has started, not that sound has already left the DAC.
-- `DONE underruns=N clipped=M` is emitted after all queued audio blocks have played.
-- A second speech request while busy gets `ERR busy`; no speech queue is exposed.
-- `STOP` stops further production and drops queued buffers. Already scheduled
-  DMA audio can take up to roughly two 256-sample blocks (~23 ms) to finish,
-  plus peripheral buffering. `STOPPED` follows once the worker has returned and
-  playback buffers are drained. This latency is a design estimate, not measured.
-- `STATUS` includes `IDLE`/`BUSY`, selected audio backend, settings, and underruns.
-- Character changes during speech apply to the next request; each request has
-  its own snapshot of the voice and pronunciation dictionary.
-
-Replies/events are mirrored to USB and UART. Each has its own receive buffer,
-so simultaneous input does not concatenate bytes across transports. Use one
-controlling host at a time to avoid conflicting commands. Both CRLF and LF work.
-Settings change in RAM until `SAVE_CONFIG` persists them. A valid snapshot
-with AUTOLOAD 1 (default) restores voice, master volume, and pronunciation rules
-at boot. `LOAD_CONFIG` restores manually; `ERASE_CONFIG` removes the snapshot;
-`DEFAULTS` resets only RAM. `SET AUTOLOAD 0` plus SAVE_CONFIG disables automatic
-restoration without deleting the saved voice. These storage commands require
-IDLE. Desktop file-based SAVE_CHARACTER/LOAD_CHARACTER are separate commands.
-
-## Flash configuration (0.4.0)
-
-Use `SAVE_CONFIG`, `LOAD_CONFIG`, `ERASE_CONFIG`, `DEFAULTS`, and
-`SET AUTOLOAD 0|1`; see the [user manual](../docs/FIRMWARE_MANUAL.md#flash-configuration-commands-040).
-All four storage/reset commands are rejected while busy. Saves skip unchanged
-payloads. Two 4 KiB sectors at flash offset 2088960 are excluded from the
-application linker map and UF2 output. CRC-protected records alternate sectors.
-
-The SDK flash-safe API parks core 1; both cores' interrupts/XIP activity and
-idle DMA/PIO playback are coordinated before erase/program, and audio is
-restarted afterward. Wait for acknowledgement before sending other commands.
+UART0 is on GP0 TX/GP1 RX, 3.3 V logic. Its factory configuration is 9600 8N1;
+valid legacy migration preserves 115200 8N1. USB provides all editing/saving,
+speech auditioning, help, and UART simulation. UART provides only compact
+speech commands and single-character feedback. Responses are never mirrored.
+There is no UART boot banner. USB defaults to editor; send HELP or STATUS.
 
 ## Build
 
-Prerequisites: Git, CMake 3.20+, Make or Ninja, a host C/C++ compiler, Python 3,
-and an `arm-none-eabi` C/C++ toolchain with newlib on PATH. Validated here with
-xPack GCC 14.2.1-1.1, Pico SDK 2.2.0, and CMake 4.4.4.
-
-From the repository root:
+Prerequisites: Git, CMake 3.20+, Make or Ninja, Python 3, a host C/C++ compiler,
+and an arm-none-eabi C/C++ compiler with newlib. Validated using xPack GCC
+14.2.1-1.1 and Pico SDK 2.2.0, pinned by tools/fetch-sdk.sh.
 
 ```sh
 make reference
 make sdk
+make test
 make firmware-pwm
 make firmware-i2s
 make firmware-test
 ```
 
-The SDK helper pins commit `a1438dff1d38bd9c65dbd693f0e5db4b9ae91779`
-(2.2.0) and initializes its pinned TinyUSB submodule. An existing SDK can instead
-be supplied through `PICO_SDK_PATH`. Pico SDK fetches/builds its matching picotool
-to produce UF2 files, so first configuration also needs GitHub access.
+Results: `build/pwm/robot-sam-PWM.uf2`, `build/i2s/robot-sam-I2S.uf2`.
+SDK initialization fetches matching picotool to build UF2 files. Set
+PICO_SDK_PATH to use an existing SDK.
 
-Output files:
-
-```text
-build/pwm/robot-sam-PWM.uf2
-build/i2s/robot-sam-I2S.uf2
-```
-
-Plain CMake selects PWM when `AUDIO_OUTPUT` is omitted in a fresh build directory:
-
-```sh
-cmake -S firmware -B build/custom -DCMAKE_BUILD_TYPE=Release
-cmake --build build/custom -j2
-```
-
-To select I2S and customize pins:
+For an explicit custom build:
 
 ```sh
 cmake -S firmware -B build/custom-i2s -DCMAKE_BUILD_TYPE=Release \
@@ -182,32 +44,75 @@ cmake -S firmware -B build/custom-i2s -DCMAKE_BUILD_TYPE=Release \
 cmake --build build/custom-i2s -j2
 ```
 
-Other CMake settings: `ROBOT_PWM_PIN`, `ROBOT_UART_TX_PIN`, `ROBOT_UART_RX_PIN`.
-PWM must use an even GPIO (channel A). I2S LRCLK is always BCLK GPIO - 1.
-Configuration rejects invalid modes, GPIO ranges, overlapping active pins,
-and pins incompatible with UART0. Check the board pinout before assigning
-alternative GPIOs; some RP2040 GPIOs are not exposed or have onboard uses.
+Other GPIO options: ROBOT_PWM_PIN, ROBOT_UART_TX_PIN, ROBOT_UART_RX_PIN.
+UART0 GPIO assignments, ranges, and active pin overlaps are checked during
+configuration. Actual baud/framing are configured through the USB editor,
+not a compiler define. The USB 1200-baud reset shortcut is disabled.
 
-## Buffering and validation
+## Implementation
 
-Core 0 handles USB/UART, DMA completion interrupts, and a 4 KiB stack. Core 1
-uses an explicit 16 KiB SRAM stack for planning and synthesis, avoiding the
-RP2040's small default scratch-bank stack. Eight fixed 256-frame buffers provide
-backpressure. Chained DMA channels keep playback running; the completion IRQ
-selects another ready block or a silence block. Silence also runs while idle,
-so I2S clocks do not intentionally stop between utterances.
+- `src/console.c`: portable USB editor, shared UART/simulation byte parser,
+  ownership, workspace/apply rules, compact events, and USB-only help.
+- `src/bank.c`: eight characters, 64 dictionary rules, validation and schema-2 codec.
+- `firmware/main.c`: GPIO/UART/USB adapters, deferred nonblocking USB output,
+  16 KiB USB TX queue, synthesis job snapshots and event delivery.
+- `src/robot.c`: pronunciation/planning; extended dictionary passed separately
+  so the existing native utility and legacy codec retain their 12-rule layout.
+- `firmware/bank_storage.c`: new journal and read-only legacy migration.
+- `firmware/storage.c`: retained legacy adapter tested for 0.4.0 compatibility;
+  not linked into the new firmware.
+- `firmware/audio.c`: eight 256-frame buffers, chained DMA, idle silence,
+  master digital volume, counters, and flash pause/resume.
 
-Underruns count silence blocks scheduled after playback has begun while the
-producer is still active. They reset per request and are reported in `STATUS`
-and completion events. They do not measure analog quality or I2S FIFO faults.
+Core 0 handles both interfaces and DMA IRQs. USB text is queued, then drained
+without blocking UART polling. Core 1 has an explicit 16 KiB SRAM stack for
+planning/synthesis and registers for Pico SDK flash-safe lockout. It receives
+copies of the selected voice, dictionary, and input; editing cannot mutate a
+running job. The engine remains non-reentrant.
 
-`make firmware-test` validates both UF2 files against their compiled binaries,
-checks the RP2040 family/address/block metadata, and simulates the shipped PIO
-instructions to check MSB order and the one-bit I2S word-select delay. Desktop
-speech regression tests remain available through `make test`. Configuration
-checks also verify that five invalid backend/pin assignments are rejected.
+All input is 7-bit ASCII. 7E1 uses hardware 7 data bits/even parity; invalid
+UART receive flags mark the current line invalid. Both parsers require CR/LF,
+including single-character commands. No interactive key editing is implemented:
+the USB terminal edits locally before transmitting complete lines.
 
-Before relying on hardware, verify both outputs with a board and amplifier;
-check BCLK/LRCLK with a scope or logic analyzer, audition speech, exercise STOP,
-and monitor underruns. I2C/SPI command transports are future features. Flash persistence is new in
-0.4.0 and needs physical save/load/power-cycle validation.
+## Flash layout and migration
+
+The target is the Zero's 2 MiB flash. The linker reserves its final **24 KiB**:
+
+| Offset | Size | Use |
+| --- | --- | --- |
+| 0x1FA000 | 8 KiB | New bank journal slot A |
+| 0x1FC000 | 8 KiB | New bank journal slot B |
+| 0x1FE000 | 4 KiB | Legacy 0.4.0 slot A |
+| 0x1FF000 | 4 KiB | Legacy 0.4.0 slot B |
+
+Schema-2 records are 6144 bytes, including a sequence, CRC32, and commit marker.
+They include global settings, eight fixed character slots, and 64 dictionary
+entries. Validation occurs before decode mutates caller state. There is no
+large record-sized automatic stack allocation. Saves alternate 8 KiB slots,
+skip identical payloads, and verify readback. ERASE_CONFIG clears all 24 KiB.
+
+Without a valid new bank, a valid legacy record is read and converted in RAM.
+The old voice becomes ROBOT slot 1, and all old volume/rules/autoload values
+are retained. Serial defaults for migrated configurations are 115200 8N1.
+Legacy sectors are not modified during migration or normal new saves.
+Normal UF2 images exclude all reserved sectors. Old fallback firmware reads
+legacy settings rather than later bank edits.
+
+Flash operations require idle, stop/restart DMA/PIO, and use the SDK flash-safe
+API to park core 1 and mask unsafe interrupts during erase/program. USB/UART
+service pauses during the operation; hosts must await acknowledgement.
+
+## Verification
+
+Native tests execute the same command core as firmware. They cover buffered
+lines, fragmented byte input, compact response bytes, error recovery, ownership,
+USB/UART isolation, workspace editing, character/dictionary operations, UART
+settings, simulation and help. Storage/codec tests include legacy migration,
+partial programming, corruption, sequence rollover, no-op writes, audio guards,
+and erasure without old data reappearing. Existing speech/audio tests remain.
+
+UF2 tests compare actual flash payloads with their binaries, exclude reserved
+sectors, and simulate PIO bit order/word-select delay. These do not verify real
+UART voltages/parity, Windows CDC behavior, physical power-cycle recovery,
+DMA timing, or amplifier sound. Follow the manual's acceptance test on hardware.

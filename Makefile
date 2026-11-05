@@ -43,15 +43,28 @@ build/test-config: tests/test_config.c src/config.c src/robot.c include/robot_co
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 tests/test_config.c src/config.c src/robot.c -o $@
 build/test-storage: tests/test_storage.c firmware/storage.c src/config.c src/robot.c include/robot_config.h | build
 	$(CC) -Itests/mocks -Ifirmware $(CPPFLAGS) $(CFLAGS) $(WARN) -DROBOT_CONFIG_FLASH_OFFSET=2088960 -std=c11 tests/test_storage.c firmware/storage.c src/config.c src/robot.c -o $@
-test: build/test-robot build/test-pcm build/test-config build/test-storage build/robot-sam
+build/test-bank: tests/test_bank.c src/bank.c src/config.c src/robot.c include/robot_bank.h include/robot_pcm.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 tests/test_bank.c src/bank.c src/config.c src/robot.c -o $@
+build/test-console: tests/test_console.c src/console.c src/bank.c src/robot.c include/robot_console.h include/robot_bank.h include/robot_pcm.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -std=c11 tests/test_console.c src/console.c src/bank.c src/robot.c -o $@
+build/test-bank-storage: tests/test_bank_storage.c firmware/bank_storage.c src/bank.c src/config.c src/robot.c include/robot_bank.h include/robot_pcm.h | build
+	$(CC) -Itests/mocks -Ifirmware $(CPPFLAGS) $(CFLAGS) $(WARN) -DROBOT_CONFIG_FLASH_OFFSET=2072576 -std=c11 tests/test_bank_storage.c firmware/bank_storage.c src/bank.c src/config.c src/robot.c -o $@
+test: build/test-robot build/test-pcm build/test-config build/test-storage build/test-bank build/test-console build/test-bank-storage build/robot-sam
 	./build/test-robot
 	./build/test-pcm
 	./build/test-config
 	./build/test-storage
+	./build/test-bank
+	./build/test-console
+	./build/test-bank-storage
 	python3 tests/test_audio.py
 sanitize: | build
 	$(CC) $(CPPFLAGS) -O1 -g -std=c11 $(WARN) -fsanitize=address,undefined -fno-omit-frame-pointer tests/test_robot.c src/robot.c -o build/test-sanitize
 	./build/test-sanitize
+	$(CC) $(CPPFLAGS) -O1 -g -std=c11 $(WARN) -fsanitize=address,undefined -fno-omit-frame-pointer tests/test_console.c src/console.c src/bank.c src/robot.c -o build/test-console-sanitize
+	./build/test-console-sanitize
+	$(CC) -Itests/mocks -Ifirmware $(CPPFLAGS) -DROBOT_CONFIG_FLASH_OFFSET=2072576 -O1 -g -std=c11 $(WARN) -fsanitize=address,undefined -fno-omit-frame-pointer tests/test_bank_storage.c firmware/bank_storage.c src/bank.c src/config.c src/robot.c -o build/test-bank-storage-sanitize
+	./build/test-bank-storage-sanitize
 demo: build/robot-sam
 	./build/robot-sam --character COMPANION --wav build/companion.wav 'Hello, my friend. Are you ready? The CPU is online. You have been warned!'
 	./build/robot-sam --character DICTATOR --wav build/dictator.wav 'Hello, my friend. Are you ready? The CPU is online. You have been warned!'

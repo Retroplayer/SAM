@@ -25,13 +25,13 @@ def check_uf2(backend):
         assert struct.unpack_from("<I", block, 508)[0] == 0x0AB16F30
         assert size == 256 and number == index and count == blocks
         assert address == 0x10000000 + index * 256
-        assert address + size <= 0x101FE000, "UF2 must not overwrite config sectors"
+        assert address + size <= 0x101FA000, "UF2 must not overwrite bank or legacy sectors"
         recovered.extend(block[32:32 + size])
     assert recovered[:len(binary)] == binary
     assert all(x == 0 for x in recovered[len(binary):])
     assert f"Robot SAM {backend}".encode() in binary
     linker=(directory / "robot_memmap.ld").read_text()
-    assert "LENGTH = 2088960" in linker, "Linker must reserve the last 8 KiB"
+    assert "LENGTH = 2072576" in linker, "Linker must reserve the last 24 KiB"
     print(f"{backend}: {blocks} valid RP2040 UF2 blocks, {len(binary)} flash bytes")
 
 

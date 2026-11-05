@@ -1,49 +1,44 @@
-# RP2040-Zero development firmware
+# RP2040-Zero firmware downloads
 
-**[Firmware user manual](../docs/FIRMWARE_MANUAL.md)** — complete setup and command reference.
+**Current: 0.5.0** · [Full user manual](../docs/FIRMWARE_MANUAL.md)
 
-Download the file for your audio hardware:
-
+- [I2S UF2](https://github.com/Retroplayer/SAM/raw/refs/heads/main/downloads/robot-sam-I2S.uf2)
 - [PWM UF2 — default](https://github.com/Retroplayer/SAM/raw/refs/heads/main/downloads/robot-sam-PWM.uf2)
-- [I2S UF2 — external DAC/amplifier](https://github.com/Retroplayer/SAM/raw/refs/heads/main/downloads/robot-sam-I2S.uf2)
+- [SHA256 checksums](SHA256SUMS)
 
-I2S wiring: **LRC/WS = GP8, BCLK = GP9, DIN = GP10**.
-Version 0.2.1 changes the I2S clock order and defaults; earlier builds used
-BCLK GP11 and LRC GP12. Use the wiring for the firmware version you flash.
+Open a file on GitHub and choose Download raw file, or use the links above.
+I2S wiring stays **LRC GP8, BCLK GP9, DIN GP10**. PWM stays GP14.
 
-Both are version 0.4.0 for Waveshare RP2040-Zero, with USB serial and UART0
-(115200 baud). Select the output by flashing the corresponding file.
+## New console design
 
-See [wiring, flashing, commands, and build instructions](../firmware/README.md).
+USB is the line-oriented editor and speech-test connection. Start with HELP,
+STATUS, and VOICE LIST. Characters (8 slots), shared pronunciations (64 entries),
+serial settings, apply/save/load, and help topics are all edited through USB.
+USB simulation uses exact `!~` / `~!` lines to enter/exit while idle, sharing the
+byte-fed UART parser and isolated temporary tweaks.
 
-**Validation:** cross-compiled for Cortex-M0+, UF2 contents checked against the
-compiled binaries, I2S PIO instruction timing simulated, desktop speech tests
-passed. **Not yet tested on physical hardware.**
+**Breaking UART change:** robot UART now accepts only short speech commands
+such as `S Hello!`, `C 1`, `V 200`, `?`, and `!`, each terminated by CR/LF.
+Replies are bare A/D/R/B/E bytes with no line endings. There are no mirrored
+USB diagnostics, UART editor mode, flash commands, or startup banner.
 
-Built with Pico SDK 2.2.0 (commit
-`a1438dff1d38bd9c65dbd693f0e5db4b9ae91779`) and xPack GCC 14.2.1-1.1.
-Checksums are in [SHA256SUMS](SHA256SUMS).
+Factory volume is **118** (100 remains unity); saved volumes are preserved.
+Factory UART is 9600 8N1. A valid old 0.4.0 save migrates automatically in RAM,
+preserving voice, volume, pronunciations and autoload policy, with UART
+115200 8N1. Inspect via USB and save to the new bank format. Supported rates
+are 1200–115200, with 8N1 or 7E1; UART APPLY explicitly changes the live link.
 
-Version 0.3.0 adds `SET VOLUME 0..400` to both outputs. Default 100 preserves
-the old level; try 150 or 200 for boost. Above 100, peaks may clip; STATUS and
-completion events report a clipping count. Character selection preserves the
-master volume, and autoload restores a saved volume, or boot defaults to 100. No extra GPIO wiring is needed.
+## Validation and fallback
 
-The firmware includes the SAM reference engine described in
-[THIRD_PARTY.md](../THIRD_PARTY.md), which has unresolved licensing.
-PIO attribution and its BSD license are in
-[firmware/LICENSE.pio](../firmware/LICENSE.pio).
-Pico SDK and TinyUSB notices are included in [SDK-LICENSE.txt](SDK-LICENSE.txt)
-and [TinyUSB-LICENSE.txt](TinyUSB-LICENSE.txt).
+Both builds are cross-compiled and pass native parser/storage/audio tests,
+UF2 reserved-region checks, and simulated I2S timing. New USB routing, physical
+UART framing, and migration still need board testing. The preserved files
+below are exact earlier binaries, not rebuilt substitutes:
 
-## Version 0.4.0: saved configuration
+- [0.4.0 fallback](v0.4.0/README.md)
+- [Hardware-tested 0.3.0 fallback](v0.3.0/README.md)
 
-Configure your robot and send SAVE_CONFIG while idle. Voice, volume, custom
-pronunciations, and AUTOLOAD policy are saved. LOAD_CONFIG restores manually;
-DEFAULTS changes RAM only; ERASE_CONFIG removes the saved snapshot. AUTOLOAD
-is enabled by default and can be disabled with SET AUTOLOAD 0 followed by save.
-See the full manual for the power-cycle test and error replies.
-
-New persistence has native corruption/interrupted-write tests and cross-build
-checks; physical flash write and playback-resume behavior still need testing.
-The [hardware-tested 0.3.0 fallback](v0.3.0/README.md) is preserved separately.
+Built with Pico SDK 2.2.0 and xPack GCC 14.2.1-1.1. Read
+[THIRD_PARTY.md](../THIRD_PARTY.md), [SDK-LICENSE.txt](SDK-LICENSE.txt),
+[TinyUSB-LICENSE.txt](TinyUSB-LICENSE.txt), and
+[PIO license](../firmware/LICENSE.pio) for included code notices.

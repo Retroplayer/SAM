@@ -2,6 +2,7 @@
 # Run from the repository root: build/robot-sam --console < demos/cylon-sam.commands
 # Output: speech-001.wav in the current directory.
 CHARACTER CLASSIC
+SET VOLUME 100
 SET PITCH 100
 SET SPEED 90
 SET MOUTH 110

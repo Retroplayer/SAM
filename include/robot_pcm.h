@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define ROBOT_VOLUME_DEFAULT 100u
+#define ROBOT_VOLUME_DEFAULT 118u
 #define ROBOT_VOLUME_MAX 400u
 
 static inline bool robot_volume_key(const char *key) {

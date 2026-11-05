@@ -90,6 +90,6 @@ with tempfile.TemporaryDirectory() as directory:
     assert rms(levels[50]) < rms(baseline) < rms(levels[200]) < rms(levels[400])
     for setting in ("401", "-1", "200junk", "999999999999999999999"):
         result = run("--console", input=f"SET VOLUME {setting}\nSTATUS\nQUIT\n")
-        assert result.returncode != 0 and "volume=100" in result.stdout
+        assert result.returncode != 0 and "volume=118" in result.stdout
 
 print("Audio checks passed: six voices, session state, phonemes, WAV integrity, volume/mute/boost, and rejected input.")

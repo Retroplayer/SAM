@@ -39,6 +39,8 @@ bool robot_pronounce(Robot *robot, const char *term, const char *spoken);
 /* Planning is atomic: count is zero on error. ASCII input, no heap allocation. */
 const char *robot_plan(const Robot *robot, const char *text, bool phonetic,
                        RobotPlan *plan);
+const char *robot_plan_with_rules(const Robot *robot,const RobotRule *rules,
+    unsigned count,const char *text,bool phonetic,RobotPlan *plan);
 typedef bool (*RobotSink)(void *context, uint8_t sample);
 /* Single synthesis instance; callback backpressure is supported. */
 bool robot_render(const RobotPlan *plan, RobotSink sink, void *context);

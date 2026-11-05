@@ -66,12 +66,12 @@ if(NOT EXISTS "${REF}/sam.c")
 endif()
 
 add_executable(robot-sam
-    main.c audio.c storage.c "${ROOT}/src/config.c"
+    main.c audio.c bank_storage.c "${ROOT}/src/config.c" "${ROOT}/src/bank.c" "${ROOT}/src/console.c"
     "${ROOT}/src/robot.c" "${ROOT}/src/render.c"
     "${REF}/sam.c" "${REF}/render.c" "${REF}/reciter.c" "${REF}/sam_debug.c")
 target_include_directories(robot-sam PRIVATE "${ROOT}/include" "${ROOT}/compat" "${REF}")
-# Reserve the last two 4 KiB sectors in both the linker map and storage driver.
-set(ROBOT_CONFIG_FLASH_OFFSET 2088960)
+# Two 8 KiB bank slots, plus the untouched legacy 0.4.0 sectors for migration.
+set(ROBOT_CONFIG_FLASH_OFFSET 2072576)
 file(READ "${PICO_SDK_PATH}/src/rp2_common/pico_crt0/rp2040/memmap_default.ld" ROBOT_LINKER_SCRIPT)
 string(REPLACE "INCLUDE \"pico_flash_region.ld\""
     "FLASH(rx) : ORIGIN = 0x10000000, LENGTH = ${ROBOT_CONFIG_FLASH_OFFSET}"
@@ -87,9 +87,10 @@ target_compile_definitions(robot-sam PRIVATE
     ROBOT_UART_TX_PIN=${ROBOT_UART_TX_PIN}
     ROBOT_UART_RX_PIN=${ROBOT_UART_RX_PIN}
     PICO_STDIO_USB_STDOUT_TIMEOUT_US=1000
+    PICO_STDIO_USB_ENABLE_RESET_VIA_BAUD_RATE=0
     PICO_STACK_SIZE=0x1000)
 target_compile_options(robot-sam PRIVATE -fno-strict-aliasing)
-set_source_files_properties(main.c audio.c storage.c "${ROOT}/src/config.c" "${ROOT}/src/robot.c" "${ROOT}/src/render.c"
+set_source_files_properties(main.c audio.c bank_storage.c "${ROOT}/src/config.c" "${ROOT}/src/bank.c" "${ROOT}/src/console.c" "${ROOT}/src/robot.c" "${ROOT}/src/render.c"
     PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Werror")
 target_link_libraries(robot-sam pico_stdlib pico_multicore hardware_dma hardware_pwm
     hardware_pio hardware_clocks hardware_uart pico_atomic pico_flash hardware_flash)
@@ -99,6 +100,6 @@ endif()
 pico_enable_stdio_usb(robot-sam 1)
 pico_enable_stdio_uart(robot-sam 0)
 pico_set_program_name(robot-sam "Robot SAM ${AUDIO_OUTPUT}")
-pico_set_program_version(robot-sam "0.4.0")
+pico_set_program_version(robot-sam "0.5.0")
 set_target_properties(robot-sam PROPERTIES OUTPUT_NAME "robot-sam-${AUDIO_OUTPUT}")
 pico_add_extra_outputs(robot-sam)
